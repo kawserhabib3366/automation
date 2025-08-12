@@ -6,7 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import undetected_chromedriver as uc
 
-
+import subprocess
 # =======================
 # LOGGING CONFIGURATION
 # =======================
@@ -58,6 +58,31 @@ def seperator(n: int = 20) -> None:
 # SELENIUM HELPERS
 # =======================
 
+def get_chrome_major_version():
+    try:
+        # Try Windows registry query for Chrome version
+        output = subprocess.check_output(
+            r'reg query "HKEY_CURRENT_USER\Software\Google\Chrome\BLBeacon" /v version',
+            shell=True, text=True
+        )
+        version_match = re.search(r"version\s+REG_SZ\s+([\d.]+)", output)
+        if version_match:
+            return int(version_match.group(1).split('.')[0])
+    except Exception:
+        pass
+
+    try:
+        # fallback: run 'chrome --version' in PATH
+        output = subprocess.check_output(["chrome", "--version"], text=True)
+        version_match = re.search(r"(\d+)\.\d+\.\d+\.\d+", output)
+        if version_match:
+            return int(version_match.group(1))
+    except Exception:
+        pass
+
+    raise RuntimeError("Could not detect Chrome version")
+
+
 def get_driver(headless: bool = False) -> uc.Chrome:
     """
     Initializes and returns a Selenium driver (undetected-chromedriver).
@@ -68,26 +93,37 @@ def get_driver(headless: bool = False) -> uc.Chrome:
     Returns:
         uc.Chrome: Configured Chrome driver.
     """
+    version = self.get_chrome_major_version()
+    logger.info(f"Detected Chrome version: {version}")
     options = uc.ChromeOptions()
     if headless:
         options.add_argument("--headless=new")
     options.add_argument("--blink-settings=imagesEnabled=false")
     options.add_argument("--disable-popup-blocking")
     options.add_argument("--no-sandbox")
-    return uc.Chrome(options=options)
+    return uc.Chrome(version_main=version,options=options)
 
 
-def login(driver: uc.Chrome) -> None:
+def loginj(driver: uc.Chrome) -> None:
     """
     Loads cookies from 'cookies.json' and adds them to the driver.
     
     Args:
         driver (uc.Chrome): Selenium driver instance.
     """
-    with open("cookies.json", "r") as file:
+    with open("dti.json", "r") as file:
         cookies = json.load(file)
         for cookie in cookies:
             driver.add_cookie(cookie)
+
+def loginc(driver):
+    with open("dti.pkl", "rb") as f:
+        cookies = pickle.load(f)
+    for cookie in cookies:
+        # Remove 'expiry' if it causes issues
+        if 'expiry' in cookie:
+            del cookie['expiry']
+        driver.add_cookie(cookie)
 
 
 def savelogin(driver: uc.Chrome) -> None:
@@ -97,9 +133,9 @@ def savelogin(driver: uc.Chrome) -> None:
     Args:
         driver (uc.Chrome): Selenium driver instance.
     """
-    with open("cookies.json", "w") as file:
+    with open("dti.json", "w") as file:
         json.dump(driver.get_cookies(), file)
-    with open("cookies.pkl", "wb") as file:
+    with open("dti.pkl", "wb") as file:
         pickle.dump(driver.get_cookies(), file)
 
 
@@ -147,6 +183,7 @@ def finebytext(driver, exact_text: str, timeout: int = 10):
     Returns:
         WebElement | None: The matched element, or None if not found.
     """
+    #subscriber_element = driver.find_element(By.XPATH,  "//*[contains(normalize-space(text()), ' subscribers')]")
     xpath = f"//*[normalize-space(text()) = \"{exact_text}\"]"
     try:
         element = WebDriverWait(driver, timeout).until(
@@ -164,6 +201,18 @@ def finebytext(driver, exact_text: str, timeout: int = 10):
 
 
 
+
+
+
+if __name__ == "__main__":
+    driver=get_driver()
+
+
+
+
+
+
+
 # =======================
 # PERSONAL NOTES / SNIPPETS
 # =======================
@@ -172,6 +221,11 @@ def finebytext(driver, exact_text: str, timeout: int = 10):
 """
 XPATH EXAMPLES:
 ---------------------
+
+#wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@data-e2e='user-more']"))).click()
+
+
+
 1. Relative to parent: .//div[1]/div/div[2]/div[2]/span[1]/span
 2. Role-based:         //*[@role="menuitem"]
 
@@ -202,8 +256,8 @@ driver.execute_script("arguments[0].click();", x)
 driver.execute_script(f"window.open('{href}', '_blank');")
 
 
-
-
+driver.execute_script(f"window.open('{url_to_open}', '_blank');")
+driver.switch_to.window(driver.window_handles[-1])
 
 ANCESTOR ELEMENT:
 ---------------------
