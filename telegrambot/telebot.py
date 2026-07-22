@@ -1,7 +1,7 @@
 import requests
 
 
-#https://api.telegram.org/bot7339400168:AAGWQcOL6epjVOMDfFtLHTwPNro17aK2yoY/getUpdates
+#https://api.telegram.org/botAPI/getUpdates
 
 
 # Replace with your actual bot token and chat ID
